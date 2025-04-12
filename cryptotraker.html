@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cripto Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f4f7fa;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #2c3e50;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 10px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      padding: 16px;
+      margin-bottom: 20px;
+      transition: 0.3s;
+    }
+    .card:hover {
+      box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+    }
+    .crypto-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .btn {
+      background: #3498db;
+      color: white;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.2s;
+      margin-right: 10px;
+    }
+    .btn:hover {
+      background: #2980b9;
+    }
+    canvas {
+      max-width: 100%;
+    }
+    @media (max-width: 600px) {
+      .crypto-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      padding-top: 100px;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.4);
+    }
+    .modal-content {
+      background-color: #fff;
+      margin: auto;
+      padding: 20px;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .modal-content h2 {
+      margin-top: 0;
+    }
+    .checkbox-list label {
+      display: block;
+      margin: 8px 0;
+    }
+    .selected-exchanges {
+      margin-top: 15px;
+      font-size: 0.95rem;
+    }
+
+    .exchange-button {
+      display: inline-flex;
+      align-items: center;
+      background: #ecf0f1;
+      color: #2c3e50;
+      padding: 6px 10px;
+      margin: 4px;
+      border-radius: 20px;
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: 0.2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .exchange-button:hover {
+      background: #d0d3d4;
+    }
+    .exchange-button img {
+      width: 16px;
+      height: 16px;
+      margin-right: 6px;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dashboard de Criptomonedas</h1>
+  </header>
+
+  <div class="container">
+    <button class="btn" onclick="fetchCryptoData()">Actualizar Información</button>
+    <button class="btn" onclick="openModal()">Seleccionar Exchanges</button>
+    <div class="selected-exchanges" id="selectedExchangesDisplay">Exchanges seleccionados: Ninguno</div>
+    <div id="cryptoContainer"></div>
+  </div>
+
+  <!-- Modal -->
+  <div id="exchangeModal" class="modal">
+    <div class="modal-content">
+      <h2>Selecciona Exchanges</h2>
+      <div class="checkbox-list">
+        <label><input type="checkbox" value="Binance" /> Binance</label>
+        <label><input type="checkbox" value="Coinbase" /> Coinbase</label>
+        <label><input type="checkbox" value="Kraken" /> Kraken</label>
+        <label><input type="checkbox" value="Bitfinex" /> Bitfinex</label>
+        <label><input type="checkbox" value="OKX" /> OKX</label>
+      </div>
+      <button class="btn" onclick="confirmExchanges()">Confirmar</button>
+    </div>
+  </div>
+
+  <script>
+    let charts = [];
+
+    const exchangeLinks = {
+      "Binance": { url: "https://www.binance.com", logo: "https://cryptologos.cc/logos/binance-coin-bnb-logo.png?v=025" },
+      "Coinbase": { url: "https://www.coinbase.com", logo: "https://cryptologos.cc/logos/coinbase-coinbase-logo.png?v=025" },
+      "Kraken": { url: "https://www.kraken.com", logo: "https://cryptologos.cc/logos/kraken-kraken-logo.png?v=025" },
+      "Bitfinex": { url: "https://www.bitfinex.com", logo: "https://cryptologos.cc/logos/bitfinex-bitfinex-logo.png?v=025" },
+      "OKX": { url: "https://www.okx.com", logo: "https://cryptologos.cc/logos/okx-okx-logo.png?v=025" }
+    };
+
+    async function fetchCryptoData() {
+      const response = await fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=5&page=1&sparkline=true&price_change_percentage=24h");
+      const data = await response.json();
+      const container = document.getElementById("cryptoContainer");
+      container.innerHTML = "";
+
+      data.forEach((coin, index) => {
+        const change = coin.price_change_percentage_24h;
+        const isPositive = change >= 0;
+        const iconClass = isPositive ? 'fa-arrow-up' : 'fa-arrow-down';
+        const color = isPositive ? 'green' : 'red';
+
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="crypto-header">
+            <h2>${coin.name} (${coin.symbol.toUpperCase()})</h2>
+            <div>
+              <strong>$${coin.current_price.toLocaleString()}</strong><br/>
+              <span style="color: ${color}; font-size: 0.95rem;">
+                <i class="fas ${iconClass}"></i> ${Math.abs(change).toFixed(2)}%
+              </span>
+            </div>
+          </div>
+          <canvas id="chart${index}" height="80"></canvas>
+        `;
+        container.appendChild(card);
+
+        const ctx = document.getElementById(`chart${index}`).getContext("2d");
+        const prices = coin.sparkline_in_7d.price.slice(-24);
+
+        const chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: prices.map((_, i) => i),
+            datasets: [{
+              label: 'Precio',
+              data: prices,
+              fill: false,
+              borderColor: '#2ecc71',
+              tension: 0.3
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { display: false },
+              y: { display: false }
+            }
+          }
+        });
+
+        charts.push(chart);
+      });
+    }
+
+    // Auto actualizar cada 15 minutos
+    setInterval(fetchCryptoData, 15 * 60 * 1000);
+    fetchCryptoData();
+
+    function openModal() {
+      document.getElementById("exchangeModal").style.display = "block";
+    }
+
+    function closeModal() {
+      document.getElementById("exchangeModal").style.display = "none";
+    }
+
+    function confirmExchanges() {
+      const checkboxes = document.querySelectorAll('.checkbox-list input[type="checkbox"]');
+      const selected = Array.from(checkboxes)
+                            .filter(cb => cb.checked)
+                            .map(cb => cb.value);
+
+      const display = document.getElementById("selectedExchangesDisplay");
+
+      if (selected.length === 0) {
+        display.innerHTML = "Exchanges seleccionados: Ninguno";
+      } else {
+        const linksHtml = selected.map(name => {
+          const exchange = exchangeLinks[name];
+          return `
+            <a class="exchange-button" href="${exchange.url}" target="_blank">
+              <img src="${exchange.logo}" alt="${name} logo" />
+              ${name}
+            </a>
+          `;
+        }).join("");
+        display.innerHTML = `Exchanges seleccionados: <br>${linksHtml}`;
+      }
+
+      closeModal();
+    }
+
+    // Cierra modal si se hace clic fuera
+    window.onclick = function(event) {
+      const modal = document.getElementById("exchangeModal");
+      if (event.target == modal) {
+        closeModal();
+      }
+    }
+  </script>
+</body>
+</html>
